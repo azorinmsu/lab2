@@ -18,64 +18,16 @@ public class AccountServiceParallelTests(ITestOutputHelper output)
     [Fact]
     public async Task FiveThreads_AddTenFiveThousandTimes_PersistExpectedSum()
     {
-        var callsPerThread = TotalCalls / ThreadCount;
-        Assert.Equal(0, TotalCalls % ThreadCount);
-        Assert.Equal(0, callsPerThread % BatchSize);
 
-        await using var postgres = new PostgreSqlBuilder("postgres:16-alpine")
-            .WithDatabase("accounts")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            .Build();
+        /*  Нужно написать тест должен запустить в testcontainers контейнре postgres, можно взять образ postgres:16-alpine
+            Создать аккаунт с суммой и именем, которые лежат в переменных AccountName и InitialSum.
+            Тест должен в 5-и потоках параллельно увеличивать баланс аккаунта на 10 копеек.
+            После обработки пачки в 100 записей нужно проверять ожидаемые баланс с фактическим балансом.
+            Проверить после всех вызовов баланс аккаунт с ожидаемым значением.
+            В сервисе AccountService умышленно добавлен баг, который вызывает гонку между потоками.
+            Нужно предложить решение, как этот баг пофиксить.
+        */
 
-        await postgres.StartAsync();
-
-        var connectionString = postgres.GetConnectionString();
-        await DatabaseInitializer.InitializeAsync(connectionString);
-        await InsertAccountAsync(connectionString, AccountName, InitialSum);
-
-        var service = new AccountService(connectionString);
-        var completed = 0;
-        var logLock = new object();
-
-        var workers = Enumerable.Range(0, ThreadCount).Select(threadIndex => Task.Run(async () =>
-        {
-            for (var call = 0; call < callsPerThread; call++)
-            {
-                await service.AddAsync(Sum, AccountName);
-                var done = Interlocked.Increment(ref completed);
-                if (done % BatchSize != 0)
-                    continue;
-
-                var stored = await ReadSumAsync(connectionString, AccountName);
-                var expected = InitialSum + done * Sum;
-
-                lock (logLock)
-                {
-                    var message = string.Format(
-                        CultureInfo.InvariantCulture,
-                        "Поток {0}. Пачка из {1} вызовов. Ожидаемое: {2}. В базе: {3}.",
-                        threadIndex + 1,
-                        BatchSize,
-                        expected,
-                        stored);
-                    output.WriteLine(message);
-                    Console.WriteLine(message);
-                }
-            }
-        })).ToArray();
-
-        await Task.WhenAll(workers);
-
-        var actual = await ReadSumAsync(connectionString, AccountName);
-        var finalExpected = InitialSum + TotalCalls * Sum;
-        output.WriteLine(string.Format(
-            CultureInfo.InvariantCulture,
-            "Итог. Ожидаемое: {0}. В базе: {1}.",
-            finalExpected,
-            actual));
-
-        Assert.Equal(finalExpected, actual);
     }
 
     private static async Task InsertAccountAsync(string connectionString, string name, double sum)
