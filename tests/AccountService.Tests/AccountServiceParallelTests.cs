@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using AccountService;
 using Npgsql;
@@ -18,8 +19,6 @@ public class AccountServiceParallelTests(ITestOutputHelper output)
     [Fact]
     public async Task FiveThreads_AddTenFiveThousandTimes_PersistExpectedSum()
     {
-
-        
         var callsPerThread = TotalCalls / ThreadCount;
         Assert.Equal(0, TotalCalls % ThreadCount);
         Assert.Equal(0, callsPerThread % BatchSize);
@@ -39,45 +38,40 @@ public class AccountServiceParallelTests(ITestOutputHelper output)
         var service = new AccountService(connectionString);
         var completed = 0;
         var logLock = new object();
+        var workload = Stopwatch.StartNew();
 
         var workers = Enumerable.Range(0, ThreadCount).Select(threadIndex => Task.Run(async () =>
         {
             for (var call = 0; call < callsPerThread; call++)
             {
                 await service.AddAsync(Sum, AccountName);
-                var done = Interlocked.Increment(ref completed);
-                if (done % BatchSize != 0)
-                    continue;
-
-                var stored = await ReadSumAsync(connectionString, AccountName);
-                var expected = InitialSum + done * Sum;
-
-                lock (logLock)
-                {
-                    var message = string.Format(
-                        CultureInfo.InvariantCulture,
-                        "Поток {0}. Пачка из {1} вызовов. Ожидаемое: {2}. В базе: {3}.",
-                        threadIndex + 1,
-                        BatchSize,
-                        expected,
-                        stored);
-                    output.WriteLine(message);
-                    Console.WriteLine(message);
-                }
             }
         })).ToArray();
 
         await Task.WhenAll(workers);
+        workload.Stop();
 
         var actual = await ReadSumAsync(connectionString, AccountName);
         var finalExpected = InitialSum + TotalCalls * Sum;
-        output.WriteLine(string.Format(
+
+        WriteLine(string.Format(
             CultureInfo.InvariantCulture,
             "Итог. Ожидаемое: {0}. В базе: {1}.",
             finalExpected,
             actual));
+        WriteLine(string.Format(
+            CultureInfo.InvariantCulture,
+            "Время выполнения {0} вызовов: {1:0.000} с.",
+            TotalCalls,
+            workload.Elapsed.TotalSeconds));
 
         Assert.Equal(finalExpected, actual);
+    }
+
+    private void WriteLine(string message)
+    {
+        output.WriteLine(message);
+        Console.WriteLine(message);
     }
 
     private static async Task InsertAccountAsync(string connectionString, string name, double sum)
