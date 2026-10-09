@@ -2,13 +2,11 @@ using AccountService;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddSingleton(sp =>
-{
-    var configuration = sp.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("Accounts")
-        ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Accounts.");
-    return new global::AccountService.AccountService(connectionString);
-});
+var connectionString = builder.Configuration.GetConnectionString("Accounts")
+    ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Accounts.");
+
+builder.Services.AddSingleton(new global::AccountService.AccountService(connectionString));
+builder.Services.AddSingleton(new ApiAccountService(connectionString));
 
 builder.Services.AddHostedService<StartupSqlHostedService>();
 

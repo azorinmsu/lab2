@@ -36,34 +36,15 @@ public class AccountServiceParallelTests(ITestOutputHelper output)
         await InsertAccountAsync(connectionString, AccountName, InitialSum);
 
         var service = new AccountService(connectionString);
-        var completed = 0;
-        var logLock = new object();
-        var workload = Stopwatch.StartNew();
+        var api = new ApiAccountService(connectionString);
 
-        var workers = Enumerable.Range(0, ThreadCount).Select(threadIndex => Task.Run(async () =>
-        {
-            for (var call = 0; call < callsPerThread; call++)
-            {
-                await service.AddAsync(Sum, AccountName);
-            }
-        })).ToArray();
-
-        await Task.WhenAll(workers);
-        workload.Stop();
+        /*
+        Тут нужно сэмулировать аномалию Lost Update между сервисами AccountService и ApiAccountService
+        Между select-ом и update-ом паузу в ApiAccountService добавлен timeout, нужно отловить этот баг.
+        */
 
         var actual = await ReadSumAsync(connectionString, AccountName);
-        var finalExpected = InitialSum + TotalCalls * Sum;
-
-        WriteLine(string.Format(
-            CultureInfo.InvariantCulture,
-            "Итог. Ожидаемое: {0}. В базе: {1}.",
-            finalExpected,
-            actual));
-        WriteLine(string.Format(
-            CultureInfo.InvariantCulture,
-            "Время выполнения {0} вызовов: {1:0.000} с.",
-            TotalCalls,
-            workload.Elapsed.TotalSeconds));
+        const double finalExpected = 343d;
 
         Assert.Equal(finalExpected, actual);
     }
