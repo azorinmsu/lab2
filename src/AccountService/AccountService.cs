@@ -24,6 +24,7 @@ public sealed class AccountService
             SELECT id, name, "sum"
             FROM account
             WHERE name = @name
+            FOR NO KEY UPDATE
             """;
 
         await using var select = new NpgsqlCommand(selectSql, connection, transaction);
